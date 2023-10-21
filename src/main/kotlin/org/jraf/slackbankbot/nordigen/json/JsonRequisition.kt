@@ -23,25 +23,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.jraf.slackchatgptbot.openai.json
+package org.jraf.slackbankbot.nordigen.json
 
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class JsonTransactionsResponse(
-  val transactions: JsonTransactionsTransactions,
+data class JsonRequisition(
+  val link: String,
 )
-
-@Serializable
-data class JsonTransactionsTransactions(
-  val booked: List<JsonTransactionsTransaction>,
-)
-
-@Serializable
-data class JsonTransactionsTransaction(
-  val internalTransactionId: String,
-  val valueDate: String,
-  val transactionAmount: JsonAmount,
-  val remittanceInformationUnstructuredArray: List<String>,
-)
-

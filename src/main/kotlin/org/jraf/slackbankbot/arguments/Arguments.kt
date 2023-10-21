@@ -27,49 +27,94 @@ package org.jraf.slackbankbot.arguments
 
 import kotlinx.cli.ArgParser
 import kotlinx.cli.ArgType
+import kotlinx.cli.ExperimentalCli
+import kotlinx.cli.Subcommand
 import kotlinx.cli.required
 import kotlinx.cli.vararg
 
+@OptIn(ExperimentalCli::class)
 class Arguments(av: Array<String>) {
   private val parser = ArgParser("slackbankbot")
 
-  val nordigenSecretId: String by parser.option(
-    type = ArgType.String,
-    fullName = "nordigen-secret-id",
-    shortName = "n",
-    description = "Nordigen secret id"
-  ).required()
+  var isBotSubcommand: Boolean = false
+    private set
 
-  val nordigenSecretKey: String by parser.option(
-    type = ArgType.String,
-    fullName = "nordigen-secret-key",
-    shortName = "k",
-    description = "Nordigen secret key"
-  ).required()
+  inner class Bot : Subcommand("bot", "Run the Slack bot") {
+    val nordigenSecretId: String by option(
+      type = ArgType.String,
+      fullName = "nordigen-secret-id",
+      shortName = "n",
+      description = "Nordigen secret id"
+    ).required()
 
-  val slackAuthToken: String by parser.option(
-    type = ArgType.String,
-    fullName = "slack-auth-token",
-    shortName = "s",
-    description = "Slack auth token"
-  ).required()
+    val nordigenSecretKey: String by option(
+      type = ArgType.String,
+      fullName = "nordigen-secret-key",
+      shortName = "k",
+      description = "Nordigen secret key"
+    ).required()
 
-  val slackChannel: String by parser.option(
-    type = ArgType.String,
-    fullName = "slack-channel",
-    shortName = "c",
-    description = "Slack channel"
-  ).required()
+    val slackAuthToken: String by option(
+      type = ArgType.String,
+      fullName = "slack-auth-token",
+      shortName = "s",
+      description = "Slack auth token"
+    ).required()
 
-  private val accountsStr: List<String> by parser.argument(
-    type = ArgType.String,
-    fullName = "accounts",
-    description = "Accounts"
-  ).vararg()
+    val slackChannel: String by option(
+      type = ArgType.String,
+      fullName = "slack-channel",
+      shortName = "c",
+      description = "Slack channel"
+    ).required()
 
-  val accounts: List<Account> get() = accountsStr.map(String::toAccount)
+    private val accountsStr: List<String> by argument(
+      type = ArgType.String,
+      fullName = "accounts",
+      description = "Accounts"
+    ).vararg()
+
+    val accounts: List<Account> get() = accountsStr.map(String::toAccount)
+    override fun execute() {
+      isBotSubcommand = true
+    }
+  }
+
+  var isRenewSubcommand: Boolean = false
+    private set
+
+  inner class Renew : Subcommand("renew", "Renew the Nordigen token") {
+    val nordigenSecretId: String by option(
+      type = ArgType.String,
+      fullName = "nordigen-secret-id",
+      shortName = "n",
+      description = "Nordigen secret id"
+    ).required()
+
+    val nordigenSecretKey: String by option(
+      type = ArgType.String,
+      fullName = "nordigen-secret-key",
+      shortName = "k",
+      description = "Nordigen secret key"
+    ).required()
+
+    val institutionId: String by option(
+      type = ArgType.String,
+      fullName = "institution-id",
+      shortName = "i",
+      description = "Institution id"
+    ).required()
+
+    override fun execute() {
+      isRenewSubcommand = true
+    }
+  }
+
+  val botSubcommand = Bot()
+  val renewSubcommand = Renew()
 
   init {
+    parser.subcommands(botSubcommand, renewSubcommand)
     parser.parse(av)
   }
 }

@@ -28,14 +28,6 @@ package org.jraf.slackbankbot.nordigen.json
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class JsonTokenNewRequest(
-    val secret_id: String,
-    val secret_key: String,
-)
-
-@Serializable
-data class JsonTokenNewResponse(
-    val access: String,
-    val refresh: String,
-    val refresh_expires: Int,
+data class JsonEndUserAgreement(
+  val id: String,
 )

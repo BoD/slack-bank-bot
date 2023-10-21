@@ -23,19 +23,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+@file:Suppress("PropertyName")
+
 package org.jraf.slackbankbot.nordigen.json
 
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class JsonTokenNewRequest(
-    val secret_id: String,
-    val secret_key: String,
-)
-
-@Serializable
-data class JsonTokenNewResponse(
-    val access: String,
-    val refresh: String,
-    val refresh_expires: Int,
+data class JsonCreateEndUserAgreementRequest(
+  val institution_id: String,
+  val access_valid_for_days: Int = 180,
 )

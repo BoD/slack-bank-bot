@@ -44,22 +44,44 @@ private val LOGGER = run {
   LoggerFactory.getLogger("Main")
 }
 
+private fun createNordigenClient(secretId: String, secretKey: String) = NordigenClient(
+  NordigenClientConfiguration(
+    secretId = secretId,
+    secretKey = secretKey,
+//    httpConfiguration = HttpConfiguration(httpProxy = HttpProxy(host = "localhost", port = 8888))
+  )
+)
+
 suspend fun main(args: Array<String>) {
   println("Hello World!")
   val arguments = Arguments(args)
+  when {
+    arguments.isBotSubcommand -> startBot(arguments.botSubcommand)
+    arguments.isRenewSubcommand -> renew(arguments.renewSubcommand)
+    else -> {
+      println("Unknown subcommand")
+      System.exit(-1)
+    }
+  }
+}
 
-  val nordigenClient = NordigenClient(
-    NordigenClientConfiguration(
-      secretId = arguments.nordigenSecretId,
-      secretKey = arguments.nordigenSecretKey,
-      // httpConfiguration = HttpConfiguration(httpProxy = HttpProxy(host = "localhost", port = 8888))
-    )
+private suspend fun renew(arguments: Arguments.Renew) {
+  val nordigenClient = createNordigenClient(arguments.nordigenSecretId, arguments.nordigenSecretKey)
+  val agreementId = nordigenClient.createEndUserAgreement(institutionId = arguments.institutionId)
+  LOGGER.debug("userAgreementId=$agreementId")
+  val requisitionLink = nordigenClient.createRequisition(
+    institutionId = arguments.institutionId,
+    agreementId = agreementId,
   )
+  LOGGER.info("Go to this link: $requisitionLink")
+}
+
+private suspend fun startBot(arguments: Arguments.Bot) {
+  val nordigenClient = createNordigenClient(arguments.nordigenSecretId, arguments.nordigenSecretKey)
 
   val slackClient = SlackClient.newInstance(ClientConfiguration("", arguments.slackAuthToken))
 
   val lastTransactions = mutableMapOf<Account, List<NordigenClient.Transaction>>()
-  val failCount = mutableMapOf<Account, Int>()
   while (true) {
     try {
       var text = ""
@@ -67,44 +89,44 @@ suspend fun main(args: Array<String>) {
       for (account in arguments.accounts) {
         LOGGER.debug("account=$account")
 
-        val transactions = nordigenClient.getTransactions(account.id)
-        LOGGER.debug("transactions.size=${transactions.size}")
-        LOGGER.debug("transactions=$transactions")
-        if (transactions.isEmpty()) {
-          LOGGER.debug("Empty list, probably credential issues")
-          val failCountForAccount = failCount.getOrPut(account) { 0 } + 1
-          failCount[account] = failCountForAccount
-          if (failCountForAccount >= 8) {
-            text += "_${account.name}_\n:warning: Could not retrieve transactions for $failCountForAccount times. Check credentials!\n\n"
+        val transactionsResult = nordigenClient.getTransactions(account.id)
+        transactionsResult.fold(
+          onFailure = { error ->
+            LOGGER.warn("Error getting transactions", error)
+            text += "_${account.name}_\n:warning: Error getting transactions: ${error.message}\n\n"
+          },
+          onSuccess = { transactions ->
+            LOGGER.debug("transactions.size=${transactions.size}")
+            LOGGER.debug("transactions=$transactions")
+            val newTransactions = transactions - (lastTransactions[account] ?: emptyList()).toSet()
+            LOGGER.debug("newTransactions.size=${newTransactions.size}")
+            LOGGER.debug("newTransactions=$newTransactions")
+
+            if (newTransactions.isNotEmpty()) {
+              text += "_${account.name}_\n"
+            }
+            for (transaction in newTransactions) {
+              val transactionText =
+                "${if (transaction.amount.startsWith('-')) "🔻" else ":small_green_triangle:"} *${transaction.amount}* - ${transaction.label}\n"
+              LOGGER.debug(transactionText)
+              text += transactionText
+            }
+            lastTransactions[account] = transactions
+
+            // Show balance if there was at least one transaction
+            if (newTransactions.isNotEmpty()) {
+              val balance = nordigenClient.getBalance(account.id)
+              text += ":sum: _${account.name}_ balance: *${balance}*\n\n"
+            }
           }
-          continue
-        }
-        val newTransactions = transactions - (lastTransactions[account] ?: emptyList()).toSet()
-        LOGGER.debug("newTransactions.size=${newTransactions.size}")
-        LOGGER.debug("newTransactions=$newTransactions")
-
-        if (newTransactions.isNotEmpty()) {
-          text += "_${account.name}_\n"
-        }
-        for (transaction in newTransactions) {
-          val transactionText =
-            "${if (transaction.amount.startsWith('-')) "🔻" else ":small_green_triangle:"} *${transaction.amount}* - ${transaction.label}\n"
-          LOGGER.debug(transactionText)
-          text += transactionText
-        }
-        lastTransactions[account] = transactions
-
-        // Show balance if there was at least one transaction
-        if (newTransactions.isNotEmpty()) {
-          val balance = nordigenClient.getBalance(account.id)
-          text += ":sum: _${account.name}_ balance: *${balance}*\n\n"
-        }
+        )
       }
 
       LOGGER.debug("text=$text")
       if (text.isNotEmpty()) {
         slackClient.chatPostMessage(text = text, channel = arguments.slackChannel)
       }
+
     } catch (t: Throwable) {
       LOGGER.warn("Caught exception in main loop", t)
     }

@@ -23,7 +23,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-package org.jraf.slackchatgptbot.openai.json
+package org.jraf.slackbankbot.nordigen.json
 
 import kotlinx.serialization.Serializable
 
@@ -36,7 +36,4 @@ data class JsonBalancesResponse(
 data class JsonBalance(
   val balanceAmount: JsonAmount,
   val balanceType: String,
-  val referenceDate: String,
 )
-
-

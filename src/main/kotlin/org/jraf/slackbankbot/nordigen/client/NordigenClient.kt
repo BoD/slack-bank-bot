@@ -40,7 +40,9 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import org.jraf.slackbankbot.nordigen.client.configuration.ClientConfiguration
 import org.jraf.slackbankbot.nordigen.client.configuration.HttpLoggingLevel
-import org.jraf.slackchatgptbot.openai.json.JsonAmount
+import org.jraf.slackbankbot.nordigen.json.JsonAmount
+import org.jraf.slackbankbot.nordigen.json.JsonErrorResponse
+import org.jraf.slackbankbot.nordigen.json.JsonTransactionsSuccessResponse
 
 class NordigenClient(private val clientConfiguration: ClientConfiguration) {
   private val service: NordigenService by lazy {
@@ -56,6 +58,7 @@ class NordigenClient(private val clientConfiguration: ClientConfiguration) {
           Json {
             ignoreUnknownKeys = true
             useAlternativeNames = false
+            encodeDefaults = true
           }
         )
       }
@@ -103,19 +106,37 @@ class NordigenClient(private val clientConfiguration: ClientConfiguration) {
     val label: String,
   )
 
-  suspend fun getTransactions(accountId: String): List<Transaction> {
-    return service.getTransactions(accountId).transactions.booked.map {
-      Transaction(
-        id = it.internalTransactionId,
-        date = it.valueDate,
-        amount = it.transactionAmount.toFormatted(),
-        label = it.remittanceInformationUnstructuredArray.firstOrNull() ?: "?",
+  class NordigenServiceException(val transactionsResponse: JsonErrorResponse) :
+    Exception(transactionsResponse.toString())
+
+  suspend fun getTransactions(accountId: String): Result<List<Transaction>> {
+    return when (val response = service.getTransactions(accountId)) {
+      is JsonErrorResponse -> Result.failure(NordigenServiceException(response))
+      is JsonTransactionsSuccessResponse -> Result.success(
+        response.transactions.booked.map {
+          Transaction(
+            id = it.internalTransactionId,
+            date = it.bookingDate,
+            amount = it.transactionAmount.toFormatted(),
+            label = it.remittanceInformationUnstructuredArray.firstOrNull() ?: "?",
+          )
+        }
       )
+
+      else -> error("Unknown response: $response")
     }
   }
 
   suspend fun getBalance(accountId: String): String {
     return service.getBalances(accountId).balances.first { it.balanceType == "closingBooked" }.balanceAmount.toFormatted()
+  }
+
+  suspend fun createEndUserAgreement(institutionId: String): String {
+    return service.createEndUserAgreement(institutionId).id
+  }
+
+  suspend fun createRequisition(institutionId: String, agreementId: String): String {
+    return service.createRequisition(institutionId, agreementId).link
   }
 
   private fun JsonAmount.toFormatted() = "$amount $currency"

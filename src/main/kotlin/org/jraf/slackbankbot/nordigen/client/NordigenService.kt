@@ -33,10 +33,14 @@ import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
-import org.jraf.slackchatgptbot.openai.json.JsonBalancesResponse
-import org.jraf.slackchatgptbot.openai.json.JsonTokenNewRequest
-import org.jraf.slackchatgptbot.openai.json.JsonTokenNewResponse
-import org.jraf.slackchatgptbot.openai.json.JsonTransactionsResponse
+import org.jraf.slackbankbot.nordigen.json.JsonBalancesResponse
+import org.jraf.slackbankbot.nordigen.json.JsonCreateEndUserAgreementRequest
+import org.jraf.slackbankbot.nordigen.json.JsonCreateRequisitionRequest
+import org.jraf.slackbankbot.nordigen.json.JsonEndUserAgreement
+import org.jraf.slackbankbot.nordigen.json.JsonRequisition
+import org.jraf.slackbankbot.nordigen.json.JsonTokenNewRequest
+import org.jraf.slackbankbot.nordigen.json.JsonTokenNewResponse
+import org.jraf.slackbankbot.nordigen.json.JsonTransactionsResponse
 
 class NordigenService(
   private val httpClient: HttpClient,
@@ -62,6 +66,20 @@ class NordigenService(
   suspend fun getBalances(accountId: String): JsonBalancesResponse {
     return httpClient.get("$URL_BASE/accounts/$accountId/balances/") {
       contentType(ContentType.Application.Json)
+    }.body()
+  }
+
+  suspend fun createEndUserAgreement(institutionId: String): JsonEndUserAgreement {
+    return httpClient.post("$URL_BASE/agreements/enduser/") {
+      contentType(ContentType.Application.Json)
+      setBody(JsonCreateEndUserAgreementRequest(institution_id = institutionId))
+    }.body()
+  }
+
+  suspend fun createRequisition(institutionId: String, agreementId: String): JsonRequisition {
+    return httpClient.post("$URL_BASE/requisitions/") {
+      contentType(ContentType.Application.Json)
+      setBody(JsonCreateRequisitionRequest(institution_id = institutionId, agreement = agreementId))
     }.body()
   }
 }
