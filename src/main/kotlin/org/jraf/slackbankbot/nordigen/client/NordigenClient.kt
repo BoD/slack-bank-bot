@@ -121,6 +121,8 @@ class NordigenClient(private val clientConfiguration: ClientConfiguration) {
             label = it.remittanceInformationUnstructuredArray.firstOrNull() ?: "?",
           )
         }
+          // Newest transactions are first, for Slack messages we want the opposite
+          .reversed()
       )
 
       else -> error("Unknown response: $response")
