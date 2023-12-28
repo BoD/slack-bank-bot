@@ -37,7 +37,7 @@ import kotlinx.serialization.json.jsonObject
 data class JsonErrorResponse(
   val summary: String,
   val detail: String,
-  val status_code: Int,
+  val status_code: Int? = null,
 ) : JsonTransactionsResponse()
 
 @Serializable(with = JsonTransactionsResponseSerializer::class)
