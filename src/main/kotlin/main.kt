@@ -30,6 +30,8 @@ import org.jraf.klibslack.client.configuration.ClientConfiguration
 import org.jraf.slackbankbot.arguments.Account
 import org.jraf.slackbankbot.arguments.Arguments
 import org.jraf.slackbankbot.nordigen.client.NordigenClient
+import org.jraf.slackbankbot.nordigen.client.configuration.HttpConfiguration
+import org.jraf.slackbankbot.nordigen.client.configuration.HttpLoggingLevel
 import org.slf4j.LoggerFactory
 import org.slf4j.simple.SimpleLogger
 import java.util.concurrent.TimeUnit
@@ -49,6 +51,7 @@ private fun createNordigenClient(secretId: String, secretKey: String) = Nordigen
     secretId = secretId,
     secretKey = secretKey,
 //    httpConfiguration = HttpConfiguration(httpProxy = HttpProxy(host = "localhost", port = 8888))
+    httpConfiguration = HttpConfiguration(loggingLevel = HttpLoggingLevel.ALL)
   )
 )
 
@@ -67,12 +70,12 @@ suspend fun main(args: Array<String>) {
 
 private suspend fun renew(arguments: Arguments.Renew) {
   val nordigenClient = createNordigenClient(arguments.nordigenSecretId, arguments.nordigenSecretKey)
-  val agreementId = nordigenClient.createEndUserAgreement(institutionId = arguments.institutionId)
+  val agreementId = nordigenClient.createEndUserAgreement(institutionId = arguments.institutionId).getOrThrow()
   LOGGER.debug("userAgreementId=$agreementId")
   val requisitionLink = nordigenClient.createRequisition(
     institutionId = arguments.institutionId,
     agreementId = agreementId,
-  )
+  ).getOrThrow()
   LOGGER.info("Go to this link: $requisitionLink")
 }
 
@@ -115,8 +118,14 @@ private suspend fun startBot(arguments: Arguments.Bot) {
 
             // Show balance if there was at least one transaction
             if (newTransactions.isNotEmpty()) {
-              val balance = nordigenClient.getBalance(account.id)
-              text += ":sum: _${account.name}_ balance: *${balance}*\n\n"
+              val balanceResult = nordigenClient.getBalance(account.id)
+              text += if (balanceResult.isFailure) {
+                val e = balanceResult.exceptionOrNull()!!
+                LOGGER.warn("Could not get balance for ${account.name}", e)
+                ":warning: Could not get balance for _${account.name}_: ${e.message}\n\n"
+              } else {
+                ":sum: _${account.name}_ balance: *${balanceResult.getOrThrow()}*\n\n"
+              }
             }
           }
         )

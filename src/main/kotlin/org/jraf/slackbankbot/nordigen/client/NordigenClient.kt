@@ -106,7 +106,7 @@ class NordigenClient(private val clientConfiguration: ClientConfiguration) {
     val label: String,
   )
 
-  class NordigenServiceException(val transactionsResponse: JsonErrorResponse) :
+  class NordigenServiceException(transactionsResponse: JsonErrorResponse) :
     Exception(transactionsResponse.toString())
 
   suspend fun getTransactions(accountId: String): Result<List<Transaction>> {
@@ -129,16 +129,22 @@ class NordigenClient(private val clientConfiguration: ClientConfiguration) {
     }
   }
 
-  suspend fun getBalance(accountId: String): String {
-    return service.getBalances(accountId).balances.first { it.balanceType == "closingBooked" }.balanceAmount.toFormatted()
+  suspend fun getBalance(accountId: String): Result<String> {
+    return runCatching {
+      service.getBalances(accountId).balances.first { it.balanceType == "closingBooked" }.balanceAmount.toFormatted()
+    }
   }
 
-  suspend fun createEndUserAgreement(institutionId: String): String {
-    return service.createEndUserAgreement(institutionId).id
+  suspend fun createEndUserAgreement(institutionId: String): Result<String> {
+    return runCatching {
+      service.createEndUserAgreement(institutionId).id
+    }
   }
 
-  suspend fun createRequisition(institutionId: String, agreementId: String): String {
-    return service.createRequisition(institutionId, agreementId).link
+  suspend fun createRequisition(institutionId: String, agreementId: String): Result<String> {
+    return runCatching {
+      service.createRequisition(institutionId, agreementId).link
+    }
   }
 
   private fun JsonAmount.toFormatted() = "$amount $currency"

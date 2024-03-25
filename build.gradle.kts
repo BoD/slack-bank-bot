@@ -39,7 +39,7 @@ dependencies {
   implementation(KotlinX.serialization.json)
 
   // Slack
-  implementation("org.jraf.klibslack", "klibslack", "_")
+  implementation("org.jraf", "klibslack", "_")
 
   implementation(KotlinX.cli)
 }
@@ -61,7 +61,6 @@ docker {
     username.set(System.getenv("DOCKER_USERNAME"))
     password.set(System.getenv("DOCKER_PASSWORD"))
   }
-
 }
 
 tasks.withType<DockerBuildImage> {

@@ -46,7 +46,7 @@ class NordigenService(
   private val httpClient: HttpClient,
 ) {
   companion object {
-    private const val URL_BASE = "https://ob.nordigen.com/api/v2"
+    private const val URL_BASE = "https://bankaccountdata.gocardless.com/api/v2"
   }
 
   suspend fun newToken(secretId: String, secretKey: String): BearerTokens {
