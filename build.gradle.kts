@@ -42,6 +42,8 @@ dependencies {
   implementation("org.jraf", "klibslack", "_")
 
   implementation(KotlinX.cli)
+
+  implementation(KotlinX.datetime)
 }
 
 application {

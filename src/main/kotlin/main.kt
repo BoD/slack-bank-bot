@@ -23,9 +23,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-@file:Suppress("LoggingStringTemplateAsArgument")
-
 import kotlinx.coroutines.delay
+import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import org.jraf.klibslack.client.SlackClient
 import org.jraf.klibslack.client.configuration.ClientConfiguration
 import org.jraf.slackbankbot.arguments.Account
@@ -36,9 +37,9 @@ import org.jraf.slackbankbot.nordigen.client.configuration.HttpLoggingLevel
 import org.jraf.slackbankbot.util.logd
 import org.jraf.slackbankbot.util.logi
 import org.jraf.slackbankbot.util.logw
+import java.math.BigDecimal
 import kotlin.time.Duration.Companion.hours
 import org.jraf.slackbankbot.nordigen.client.configuration.ClientConfiguration as NordigenClientConfiguration
-
 
 private fun createNordigenClient(secretId: String, secretKey: String) = NordigenClient(
   NordigenClientConfiguration(
@@ -93,34 +94,46 @@ private suspend fun startBot(arguments: Arguments.Bot) {
             text += "_${account.name}_\n:warning: Error getting transactions: ${error.message}\n\n"
           },
           onSuccess = { transactions ->
-            logd("transactions.size=${transactions.size}")
             logd("transactions=$transactions")
             val newTransactions = transactions - (lastTransactions[account] ?: emptyList()).toSet()
-            logd("newTransactions.size=${newTransactions.size}")
             logd("newTransactions=$newTransactions")
 
             if (newTransactions.isNotEmpty()) {
+              // Account name
               text += "_${account.name}_\n"
-            }
-            for (transaction in newTransactions) {
-              val transactionText =
-                "${if (transaction.amount.startsWith('-')) "🔻" else ":small_green_triangle:"} *${transaction.amount}* - ${transaction.label}\n"
-              logd(transactionText)
-              text += transactionText
-            }
-            lastTransactions[account] = transactions
 
-            // Show balance if there was at least one transaction
-            if (newTransactions.isNotEmpty()) {
+              // Transactions
+              for (transaction in newTransactions) {
+                val transactionText =
+                  "${transaction.amount.formatted()} - ${transaction.label}\n"
+                logd(transactionText)
+                text += transactionText
+              }
+
+              // Spent/earned this month
+              val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+              val thisMonthAmounts = transactions
+                .filter { it.date.year == today.year && it.date.monthNumber == today.monthNumber }
+                .map { it.amount }
+              val spentThisMonth =
+                thisMonthAmounts.filter { it.signum() < 0 }.reduceOrNull { acc, amount -> acc + amount } ?: BigDecimal.ZERO
+              val earnedThisMonth =
+                thisMonthAmounts.filter { it.signum() > 0 }.reduceOrNull { acc, amount -> acc + amount } ?: BigDecimal.ZERO
+              val netThisMonth = earnedThisMonth + spentThisMonth
+              text += ":sum: This month: ${netThisMonth.formatted()} (${spentThisMonth.formatted()} - ${earnedThisMonth.formatted()})\n"
+
+              // Balance
               val balanceResult = nordigenClient.getBalance(account.id)
               text += if (balanceResult.isFailure) {
                 val e = balanceResult.exceptionOrNull()!!
                 logw(e, "Could not get balance for ${account.name}")
                 ":warning: Could not get balance for _${account.name}_: ${e.message}\n\n"
               } else {
-                ":sum: _${account.name}_ balance: *${balanceResult.getOrThrow()}*\n\n"
+                ":moneybag: Current balance: ${balanceResult.getOrThrow().formatted(withEmoji = false)}\n\n"
               }
             }
+
+            lastTransactions[account] = transactions
           }
         )
       }
@@ -138,3 +151,11 @@ private suspend fun startBot(arguments: Arguments.Bot) {
     delay(4.hours)
   }
 }
+
+private fun BigDecimal.emoji() = if (signum() < 0) "🔻" else ":small_green_triangle:"
+
+private fun BigDecimal.formatted(withEmoji: Boolean = true) = if (withEmoji) {
+  emoji() + " "
+} else {
+  ""
+} + "*" + String.format("%.2f", this) + " €*"

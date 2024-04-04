@@ -37,12 +37,14 @@ import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.logging.Logging
 import io.ktor.http.URLBuilder
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.datetime.LocalDate
 import kotlinx.serialization.json.Json
 import org.jraf.slackbankbot.nordigen.client.configuration.ClientConfiguration
 import org.jraf.slackbankbot.nordigen.client.configuration.HttpLoggingLevel
 import org.jraf.slackbankbot.nordigen.json.JsonAmount
 import org.jraf.slackbankbot.nordigen.json.JsonErrorResponse
 import org.jraf.slackbankbot.nordigen.json.JsonTransactionsSuccessResponse
+import java.math.BigDecimal
 
 class NordigenClient(private val clientConfiguration: ClientConfiguration) {
   private val service: NordigenService by lazy {
@@ -101,10 +103,23 @@ class NordigenClient(private val clientConfiguration: ClientConfiguration) {
 
   data class Transaction(
     val id: String,
-    val date: String,
-    val amount: String,
+    val date: LocalDate,
+    val amount: BigDecimal,
     val label: String,
-  )
+  ) {
+    override fun equals(other: Any?): Boolean {
+      if (this === other) return true
+      if (javaClass != other?.javaClass) return false
+
+      other as Transaction
+
+      return id == other.id
+    }
+
+    override fun hashCode(): Int {
+      return id.hashCode()
+    }
+  }
 
   class NordigenServiceException(transactionsResponse: JsonErrorResponse) :
     Exception(transactionsResponse.toString())
@@ -113,12 +128,12 @@ class NordigenClient(private val clientConfiguration: ClientConfiguration) {
     return when (val response = service.getTransactions(accountId)) {
       is JsonErrorResponse -> Result.failure(NordigenServiceException(response))
       is JsonTransactionsSuccessResponse -> Result.success(
-        response.transactions.booked.map {
+        response.transactions.booked.map { jsonTransaction ->
           Transaction(
-            id = it.internalTransactionId,
-            date = it.bookingDate,
-            amount = it.transactionAmount.toFormatted(),
-            label = it.remittanceInformationUnstructuredArray.firstOrNull() ?: "?",
+            id = jsonTransaction.internalTransactionId,
+            date = LocalDate.parse(jsonTransaction.bookingDate),
+            amount = jsonTransaction.transactionAmount.toBigDecimal(),
+            label = jsonTransaction.remittanceInformationUnstructuredArray.firstOrNull() ?: "?",
           )
         }
           // Newest transactions are first, for Slack messages we want the opposite
@@ -129,9 +144,11 @@ class NordigenClient(private val clientConfiguration: ClientConfiguration) {
     }
   }
 
-  suspend fun getBalance(accountId: String): Result<String> {
+  private fun JsonAmount.toBigDecimal() = BigDecimal(amount)
+
+  suspend fun getBalance(accountId: String): Result<BigDecimal> {
     return runCatching {
-      service.getBalances(accountId).balances.first { it.balanceType == "closingBooked" }.balanceAmount.toFormatted()
+      service.getBalances(accountId).balances.first { it.balanceType == "closingBooked" }.balanceAmount.toBigDecimal()
     }
   }
 
@@ -146,6 +163,4 @@ class NordigenClient(private val clientConfiguration: ClientConfiguration) {
       service.createRequisition(institutionId, agreementId).link
     }
   }
-
-  private fun JsonAmount.toFormatted() = "$amount $currency"
 }
