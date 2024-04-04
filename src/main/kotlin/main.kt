@@ -25,6 +25,7 @@
 
 @file:Suppress("LoggingStringTemplateAsArgument")
 
+import kotlinx.coroutines.delay
 import org.jraf.klibslack.client.SlackClient
 import org.jraf.klibslack.client.configuration.ClientConfiguration
 import org.jraf.slackbankbot.arguments.Account
@@ -32,19 +33,12 @@ import org.jraf.slackbankbot.arguments.Arguments
 import org.jraf.slackbankbot.nordigen.client.NordigenClient
 import org.jraf.slackbankbot.nordigen.client.configuration.HttpConfiguration
 import org.jraf.slackbankbot.nordigen.client.configuration.HttpLoggingLevel
-import org.slf4j.LoggerFactory
-import org.slf4j.simple.SimpleLogger
-import java.util.concurrent.TimeUnit
+import org.jraf.slackbankbot.util.logd
+import org.jraf.slackbankbot.util.logi
+import org.jraf.slackbankbot.util.logw
+import kotlin.time.Duration.Companion.hours
 import org.jraf.slackbankbot.nordigen.client.configuration.ClientConfiguration as NordigenClientConfiguration
 
-private val LOGGER = run {
-  // This must be done before any logger is initialized
-  System.setProperty(SimpleLogger.DEFAULT_LOG_LEVEL_KEY, "trace")
-  System.setProperty(SimpleLogger.SHOW_DATE_TIME_KEY, "true")
-  System.setProperty(SimpleLogger.DATE_TIME_FORMAT_KEY, "yyyy-MM-dd HH:mm:ss")
-
-  LoggerFactory.getLogger("Main")
-}
 
 private fun createNordigenClient(secretId: String, secretKey: String) = NordigenClient(
   NordigenClientConfiguration(
@@ -71,12 +65,12 @@ suspend fun main(args: Array<String>) {
 private suspend fun renew(arguments: Arguments.Renew) {
   val nordigenClient = createNordigenClient(arguments.nordigenSecretId, arguments.nordigenSecretKey)
   val agreementId = nordigenClient.createEndUserAgreement(institutionId = arguments.institutionId).getOrThrow()
-  LOGGER.debug("userAgreementId=$agreementId")
+  logd("userAgreementId=$agreementId")
   val requisitionLink = nordigenClient.createRequisition(
     institutionId = arguments.institutionId,
     agreementId = agreementId,
   ).getOrThrow()
-  LOGGER.info("Go to this link: $requisitionLink")
+  logi("Go to this link: $requisitionLink")
 }
 
 private suspend fun startBot(arguments: Arguments.Bot) {
@@ -88,22 +82,22 @@ private suspend fun startBot(arguments: Arguments.Bot) {
   while (true) {
     try {
       var text = ""
-      LOGGER.debug("accountArguments=${arguments.accounts}")
+      logd("accountArguments=${arguments.accounts}")
       for (account in arguments.accounts) {
-        LOGGER.debug("account=$account")
+        logd("account=$account")
 
         val transactionsResult = nordigenClient.getTransactions(account.id)
         transactionsResult.fold(
           onFailure = { error ->
-            LOGGER.warn("Error getting transactions", error)
+            logw(error, "Error getting transactions")
             text += "_${account.name}_\n:warning: Error getting transactions: ${error.message}\n\n"
           },
           onSuccess = { transactions ->
-            LOGGER.debug("transactions.size=${transactions.size}")
-            LOGGER.debug("transactions=$transactions")
+            logd("transactions.size=${transactions.size}")
+            logd("transactions=$transactions")
             val newTransactions = transactions - (lastTransactions[account] ?: emptyList()).toSet()
-            LOGGER.debug("newTransactions.size=${newTransactions.size}")
-            LOGGER.debug("newTransactions=$newTransactions")
+            logd("newTransactions.size=${newTransactions.size}")
+            logd("newTransactions=$newTransactions")
 
             if (newTransactions.isNotEmpty()) {
               text += "_${account.name}_\n"
@@ -111,7 +105,7 @@ private suspend fun startBot(arguments: Arguments.Bot) {
             for (transaction in newTransactions) {
               val transactionText =
                 "${if (transaction.amount.startsWith('-')) "🔻" else ":small_green_triangle:"} *${transaction.amount}* - ${transaction.label}\n"
-              LOGGER.debug(transactionText)
+              logd(transactionText)
               text += transactionText
             }
             lastTransactions[account] = transactions
@@ -121,7 +115,7 @@ private suspend fun startBot(arguments: Arguments.Bot) {
               val balanceResult = nordigenClient.getBalance(account.id)
               text += if (balanceResult.isFailure) {
                 val e = balanceResult.exceptionOrNull()!!
-                LOGGER.warn("Could not get balance for ${account.name}", e)
+                logw(e, "Could not get balance for ${account.name}")
                 ":warning: Could not get balance for _${account.name}_: ${e.message}\n\n"
               } else {
                 ":sum: _${account.name}_ balance: *${balanceResult.getOrThrow()}*\n\n"
@@ -131,16 +125,16 @@ private suspend fun startBot(arguments: Arguments.Bot) {
         )
       }
 
-      LOGGER.debug("text=$text")
+      logd("text=$text")
       if (text.isNotEmpty()) {
         slackClient.chatPostMessage(text = text, channel = arguments.slackChannel)
       }
 
     } catch (t: Throwable) {
-      LOGGER.warn("Caught exception in main loop", t)
+      logw(t, "Caught exception in main loop")
     }
 
-    LOGGER.debug("Sleep 4 hours")
-    TimeUnit.HOURS.sleep(4)
+    logd("Sleep 4 hours")
+    delay(4.hours)
   }
 }
