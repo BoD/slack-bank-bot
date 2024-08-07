@@ -25,7 +25,9 @@
 
 import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 import org.jraf.klibslack.client.SlackClient
 import org.jraf.klibslack.client.configuration.ClientConfiguration
@@ -112,15 +114,17 @@ private suspend fun startBot(arguments: Arguments.Bot) {
 
               // Spent/earned this month
               val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-              val thisMonthAmounts = transactions
-                .filter { it.date.year == today.year && it.date.monthNumber == today.monthNumber }
+              val last30DaysAmounts = transactions
+                .filter { it.date >= today.minus(30, DateTimeUnit.DAY) }
                 .map { it.amount }
               val spentThisMonth =
-                thisMonthAmounts.filter { it.signum() < 0 }.reduceOrNull { acc, amount -> acc + amount } ?: BigDecimal.ZERO
+                last30DaysAmounts.filter { it.signum() < 0 }.reduceOrNull { acc, amount -> acc + amount }
+                  ?: BigDecimal.ZERO
               val earnedThisMonth =
-                thisMonthAmounts.filter { it.signum() > 0 }.reduceOrNull { acc, amount -> acc + amount } ?: BigDecimal.ZERO
+                last30DaysAmounts.filter { it.signum() > 0 }.reduceOrNull { acc, amount -> acc + amount }
+                  ?: BigDecimal.ZERO
               val netThisMonth = earnedThisMonth + spentThisMonth
-              text += ":sum: This month: ${netThisMonth.formatted()} (${spentThisMonth.formatted()} - ${earnedThisMonth.formatted()})\n"
+              text += ":sum: Last 30 days: ${netThisMonth.formatted()} (${spentThisMonth.formatted()} - ${earnedThisMonth.formatted()})\n"
 
               // Balance
               val balanceResult = nordigenClient.getBalance(account.id)
