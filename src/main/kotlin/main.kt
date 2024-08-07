@@ -124,7 +124,7 @@ private suspend fun startBot(arguments: Arguments.Bot) {
                 last30DaysAmounts.filter { it.signum() > 0 }.reduceOrNull { acc, amount -> acc + amount }
                   ?: BigDecimal.ZERO
               val netThisMonth = earnedThisMonth + spentThisMonth
-              text += ":sum: Last 30 days: ${netThisMonth.formatted()} (${spentThisMonth.formatted()} - ${earnedThisMonth.formatted()})\n"
+              text += ":sum: Last 30 days: earned ${earnedThisMonth.formatted()} - spent ${spentThisMonth.formatted()} = net ${netThisMonth.formatted()}\n"
 
               // Balance
               val balanceResult = nordigenClient.getBalance(account.id)
