@@ -97,10 +97,13 @@ private suspend fun startBot(arguments: Arguments.Bot) {
           },
           onSuccess = { transactions ->
             logd("transactions=$transactions")
-            val newTransactions = transactions - (lastTransactions[account] ?: emptyList()).toSet()
+            val lastTransactionsForAccount = lastTransactions[account].orEmpty().toSet()
+            val newTransactions = transactions - lastTransactionsForAccount
             logd("newTransactions=$newTransactions")
 
-            if (newTransactions.isNotEmpty()) {
+            if (lastTransactionsForAccount.isEmpty()) {
+              logd("No last transactions for account ${account.name}: skipping")
+            } else if (newTransactions.isNotEmpty()) {
               // Account name
               text += "_${account.name}_\n"
 

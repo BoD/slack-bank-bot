@@ -4,21 +4,20 @@ import com.bmuschko.gradle.docker.tasks.image.Dockerfile.CopyFileInstruction
 
 plugins {
   kotlin("jvm")
-  kotlin("plugin.serialization")
-  application
+  id("application")
   id("com.bmuschko.docker-java-application")
+  kotlin("plugin.serialization")
 }
 
 group = "org.jraf"
 version = "1.0.0"
 
-repositories {
-  mavenLocal()
-  mavenCentral()
-}
-
 kotlin {
   jvmToolchain(11)
+}
+
+application {
+  mainClass.set("MainKt")
 }
 
 dependencies {
@@ -44,10 +43,6 @@ dependencies {
   implementation(KotlinX.cli)
 
   implementation(KotlinX.datetime)
-}
-
-application {
-  mainClass.set("MainKt")
 }
 
 docker {
