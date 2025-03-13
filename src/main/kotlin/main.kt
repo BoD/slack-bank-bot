@@ -158,8 +158,8 @@ private suspend fun startBot(arguments: Arguments.Bot) {
       logw(t, "Caught exception in main loop")
     }
 
-    logd("Sleep 4 hours")
-    delay(4.hours)
+    logd("Sleep 6 hours")
+    delay(6.hours)
   }
 }
 
