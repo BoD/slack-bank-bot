@@ -26,9 +26,14 @@
 import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
+import org.jraf.klibnanolog.logd
+import org.jraf.klibnanolog.loge
+import org.jraf.klibnanolog.logi
+import org.jraf.klibnanolog.logw
 import org.jraf.klibslack.client.SlackClient
 import org.jraf.klibslack.client.configuration.ClientConfiguration
 import org.jraf.slackbankbot.arguments.Account
@@ -36,9 +41,6 @@ import org.jraf.slackbankbot.arguments.Arguments
 import org.jraf.slackbankbot.nordigen.client.NordigenClient
 import org.jraf.slackbankbot.nordigen.client.configuration.HttpConfiguration
 import org.jraf.slackbankbot.nordigen.client.configuration.HttpLoggingLevel
-import org.jraf.slackbankbot.util.logd
-import org.jraf.slackbankbot.util.logi
-import org.jraf.slackbankbot.util.logw
 import java.math.BigDecimal
 import kotlin.time.Duration.Companion.hours
 import org.jraf.slackbankbot.nordigen.client.configuration.ClientConfiguration as NordigenClientConfiguration
@@ -48,18 +50,18 @@ private fun createNordigenClient(secretId: String, secretKey: String) = Nordigen
     secretId = secretId,
     secretKey = secretKey,
 //    httpConfiguration = HttpConfiguration(httpProxy = HttpProxy(host = "localhost", port = 8888))
-    httpConfiguration = HttpConfiguration(loggingLevel = HttpLoggingLevel.ALL)
-  )
+    httpConfiguration = HttpConfiguration(loggingLevel = HttpLoggingLevel.ALL),
+  ),
 )
 
 suspend fun main(args: Array<String>) {
-  println("Hello World!")
+  logi("Hello World!")
   val arguments = Arguments(args)
   when {
     arguments.isBotSubcommand -> startBot(arguments.botSubcommand)
     arguments.isRenewSubcommand -> renew(arguments.renewSubcommand)
     else -> {
-      println("Unknown subcommand")
+      loge("Unknown subcommand")
       System.exit(-1)
     }
   }
@@ -97,6 +99,7 @@ private suspend fun startBot(arguments: Arguments.Bot) {
           },
           onSuccess = { transactions ->
             logd("transactions=$transactions")
+            val transactions = transactions.distinctBy { it.id }
             val lastTransactionsForAccount = lastTransactions[account].orEmpty().toSet()
             val newTransactions = transactions - lastTransactionsForAccount
             logd("newTransactions=$newTransactions")
@@ -115,22 +118,26 @@ private suspend fun startBot(arguments: Arguments.Bot) {
                 text += transactionText
               }
 
-              // Spent/earned this month
               val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-              val last30DaysAmounts = transactions
-                .filter { it.date >= today.minus(30, DateTimeUnit.DAY) }
-                .map { it.amount }
-              val spentThisMonth =
-                last30DaysAmounts.filter { it.signum() < 0 }.reduceOrNull { acc, amount -> acc + amount }
-                  ?: BigDecimal.ZERO
-              val earnedThisMonth =
-                last30DaysAmounts.filter { it.signum() > 0 }.reduceOrNull { acc, amount -> acc + amount }
-                  ?: BigDecimal.ZERO
-              val netThisMonth = earnedThisMonth + spentThisMonth
-              text += ":sum: Last 30 days: earned ${earnedThisMonth.formatted(withEmoji = false)}, spent ${
-                spentThisMonth.formatted(
-                  withEmoji = false,
-                )
+              val startOfThisMonth = today.minus(today.dayOfMonth - 1, DateTimeUnit.DAY)
+              val startOfLastMonth = startOfThisMonth.minus(1, DateTimeUnit.MONTH)
+
+              // Spent/earned last month
+              val (spentLastMonth, earnedLastMonth, netLastMonth) = transactions.spentEarnedNet(
+                startDateInclusive = startOfLastMonth,
+                endDateExclusive = startOfThisMonth,
+              )
+              text += ":calendar: Last month: earned ${earnedLastMonth.formatted(withEmoji = false)}, spent ${
+                spentLastMonth.formatted(withEmoji = false)
+              }, net ${netLastMonth.formatted()}\n\n"
+
+              // Spent/earned this month
+              val (spentThisMonth, earnedThisMonth, netThisMonth) = transactions.spentEarnedNet(
+                startDateInclusive = startOfThisMonth,
+                endDateExclusive = null,
+              )
+              text += ":sum: This month: earned ${earnedThisMonth.formatted(withEmoji = false)}, spent ${
+                spentThisMonth.formatted(withEmoji = false)
               }, net ${netThisMonth.formatted()}\n"
 
               // Balance
@@ -161,6 +168,23 @@ private suspend fun startBot(arguments: Arguments.Bot) {
     logd("Sleep 6 hours")
     delay(6.hours)
   }
+}
+
+private fun List<NordigenClient.Transaction>.spentEarnedNet(
+  startDateInclusive: LocalDate,
+  endDateExclusive: LocalDate?,
+): Triple<BigDecimal, BigDecimal, BigDecimal> {
+  val lastMonthAmounts =
+    filter { it.date >= startDateInclusive && (endDateExclusive == null || it.date < endDateExclusive) }
+      .map { it.amount }
+  val spentLastMonth =
+    lastMonthAmounts.filter { it.signum() < 0 }.reduceOrNull { acc, amount -> acc + amount }
+      ?: BigDecimal.ZERO
+  val earnedLastMonth =
+    lastMonthAmounts.filter { it.signum() > 0 }.reduceOrNull { acc, amount -> acc + amount }
+      ?: BigDecimal.ZERO
+  val netLastMonth = earnedLastMonth + spentLastMonth
+  return Triple(spentLastMonth, earnedLastMonth, netLastMonth)
 }
 
 private fun BigDecimal.emoji() = if (signum() < 0) "🔻" else ":small_green_triangle:"

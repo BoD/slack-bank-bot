@@ -21,10 +21,6 @@ application {
 }
 
 dependencies {
-  // Slf4j
-  implementation("org.slf4j", "slf4j-api", "_")
-  implementation("org.slf4j", "slf4j-simple", "_")
-
   implementation(KotlinX.coroutines.jdk9)
 
   // Ktor
@@ -40,6 +36,9 @@ dependencies {
   // Slack
   implementation("org.jraf", "klibslack", "_")
 
+  // Logging
+  implementation("org.jraf", "klibnanolog", "_")
+
   implementation(KotlinX.cli)
 
   implementation(KotlinX.datetime)
@@ -48,7 +47,7 @@ dependencies {
 docker {
   javaApplication {
     // Use OpenJ9 instead of the default one
-    baseImage.set("adoptopenjdk/openjdk11-openj9:x86_64-ubuntu-jre-11.0.24_8_openj9-0.46.1")
+    baseImage.set("adoptopenjdk/openjdk11-openj9:x86_64-ubuntu-jre-11.0.26_4_openj9-0.49.0")
     maintainer.set("BoD <BoD@JRAF.org>")
     ports.set(emptyList())
     images.add("bodlulu/${rootProject.name}:latest")

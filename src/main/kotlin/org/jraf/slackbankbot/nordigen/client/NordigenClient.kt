@@ -31,7 +31,6 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.auth.Auth
 import io.ktor.client.plugins.auth.providers.bearer
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.plugins.logging.DEFAULT
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.logging.Logging
@@ -39,6 +38,7 @@ import io.ktor.http.URLBuilder
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.datetime.LocalDate
 import kotlinx.serialization.json.Json
+import org.jraf.klibnanolog.logd
 import org.jraf.slackbankbot.nordigen.client.configuration.ClientConfiguration
 import org.jraf.slackbankbot.nordigen.client.configuration.HttpLoggingLevel
 import org.jraf.slackbankbot.nordigen.json.JsonAmount
@@ -49,7 +49,7 @@ import java.math.BigDecimal
 class NordigenClient(private val clientConfiguration: ClientConfiguration) {
   private val service: NordigenService by lazy {
     NordigenService(
-      provideHttpClient(clientConfiguration)
+      provideHttpClient(clientConfiguration),
     )
   }
 
@@ -61,7 +61,7 @@ class NordigenClient(private val clientConfiguration: ClientConfiguration) {
             ignoreUnknownKeys = true
             useAlternativeNames = false
             encodeDefaults = true
-          }
+          },
         )
       }
       install(Auth) {
@@ -79,16 +79,22 @@ class NordigenClient(private val clientConfiguration: ClientConfiguration) {
       engine {
         // Setup a proxy if requested
         clientConfiguration.httpConfiguration.httpProxy?.let { httpProxy ->
-          proxy = ProxyBuilder.http(URLBuilder().apply {
-            host = httpProxy.host
-            port = httpProxy.port
-          }.build())
+          proxy = ProxyBuilder.http(
+            URLBuilder().apply {
+              host = httpProxy.host
+              port = httpProxy.port
+            }.build(),
+          )
         }
       }
       // Setup logging if requested
       if (clientConfiguration.httpConfiguration.loggingLevel != HttpLoggingLevel.NONE) {
         install(Logging) {
-          logger = Logger.DEFAULT
+          logger = object : Logger {
+            override fun log(message: String) {
+              logd("http - $message")
+            }
+          }
           level = when (clientConfiguration.httpConfiguration.loggingLevel) {
             HttpLoggingLevel.NONE -> LogLevel.NONE
             HttpLoggingLevel.INFO -> LogLevel.INFO
@@ -125,7 +131,11 @@ class NordigenClient(private val clientConfiguration: ClientConfiguration) {
     Exception(transactionsResponse.toString())
 
   suspend fun getTransactions(accountId: String): Result<List<Transaction>> {
-    return when (val response = service.getTransactions(accountId)) {
+    val transactionsResult = runCatching { service.getTransactions(accountId) }
+    if (transactionsResult.isFailure) {
+      return Result.failure(transactionsResult.exceptionOrNull()!!)
+    }
+    return when (val response = transactionsResult.getOrThrow()) {
       is JsonErrorResponse -> Result.failure(NordigenServiceException(response))
       is JsonTransactionsSuccessResponse -> Result.success(
         response.transactions.booked.map { jsonTransaction ->
@@ -137,7 +147,7 @@ class NordigenClient(private val clientConfiguration: ClientConfiguration) {
           )
         }
           // Newest transactions are first, for Slack messages we want the opposite
-          .reversed()
+          .reversed(),
       )
 
       else -> error("Unknown response: $response")
