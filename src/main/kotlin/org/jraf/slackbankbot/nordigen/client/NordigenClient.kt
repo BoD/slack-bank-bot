@@ -140,7 +140,7 @@ class NordigenClient(private val clientConfiguration: ClientConfiguration) {
       is JsonTransactionsSuccessResponse -> Result.success(
         response.transactions.booked.map { jsonTransaction ->
           Transaction(
-            id = jsonTransaction.internalTransactionId,
+            id = jsonTransaction.transactionId,
             date = LocalDate.parse(jsonTransaction.bookingDate),
             amount = jsonTransaction.transactionAmount.toBigDecimal(),
             label = jsonTransaction.remittanceInformationUnstructuredArray.firstOrNull() ?: "?",
