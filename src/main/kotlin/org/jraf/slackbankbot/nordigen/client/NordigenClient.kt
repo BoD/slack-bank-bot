@@ -113,17 +113,26 @@ class NordigenClient(private val clientConfiguration: ClientConfiguration) {
     val amount: BigDecimal,
     val label: String,
   ) {
+    // We get the same transactions multiple times with different internal ids ¯\_(ツ)_/¯
+    // So base equality on the date, amount and label.
     override fun equals(other: Any?): Boolean {
       if (this === other) return true
       if (javaClass != other?.javaClass) return false
 
       other as Transaction
 
-      return id == other.id
+      if (date != other.date) return false
+      if (amount != other.amount) return false
+      if (label != other.label) return false
+
+      return true
     }
 
     override fun hashCode(): Int {
-      return id.hashCode()
+      var result = date.hashCode()
+      result = 31 * result + amount.hashCode()
+      result = 31 * result + label.hashCode()
+      return result
     }
   }
 
@@ -140,10 +149,14 @@ class NordigenClient(private val clientConfiguration: ClientConfiguration) {
       is JsonTransactionsSuccessResponse -> Result.success(
         response.transactions.booked.map { jsonTransaction ->
           Transaction(
-            id = jsonTransaction.transactionId,
+            id = jsonTransaction.internalTransactionId,
             date = LocalDate.parse(jsonTransaction.bookingDate),
             amount = jsonTransaction.transactionAmount.toBigDecimal(),
-            label = jsonTransaction.remittanceInformationUnstructuredArray.firstOrNull() ?: "?",
+            label = jsonTransaction.remittanceInformationUnstructuredArray
+              .sorted()
+              .joinToString(" / ")
+              .replace("\n", " ")
+              .replace(Regex("\\s+"), " "),
           )
         }
           // Newest transactions are first, for Slack messages we want the opposite

@@ -42,6 +42,7 @@ import org.jraf.slackbankbot.nordigen.client.NordigenClient
 import org.jraf.slackbankbot.nordigen.client.configuration.HttpConfiguration
 import org.jraf.slackbankbot.nordigen.client.configuration.HttpLoggingLevel
 import java.math.BigDecimal
+import kotlin.system.exitProcess
 import kotlin.time.Duration.Companion.hours
 import org.jraf.slackbankbot.nordigen.client.configuration.ClientConfiguration as NordigenClientConfiguration
 
@@ -50,7 +51,7 @@ private fun createNordigenClient(secretId: String, secretKey: String) = Nordigen
     secretId = secretId,
     secretKey = secretKey,
 //    httpConfiguration = HttpConfiguration(httpProxy = HttpProxy(host = "localhost", port = 8888))
-    httpConfiguration = HttpConfiguration(loggingLevel = HttpLoggingLevel.ALL),
+    httpConfiguration = HttpConfiguration(loggingLevel = HttpLoggingLevel.BODY),
   ),
 )
 
@@ -62,7 +63,7 @@ suspend fun main(args: Array<String>) {
     arguments.isRenewSubcommand -> renew(arguments.renewSubcommand)
     else -> {
       loge("Unknown subcommand")
-      System.exit(-1)
+      exitProcess(-1)
     }
   }
 }
@@ -88,8 +89,16 @@ private suspend fun startBot(arguments: Arguments.Bot) {
     try {
       var text = ""
       logd("accountArguments=${arguments.accounts}")
-      for (account in arguments.accounts) {
-        logd("account=$account")
+      for ((i, account) in arguments.accounts.withIndex()) {
+        logd(
+          """
+        
+
+              -----------------------------------------------------------------------------------------
+              account=$account (${i + 1}/${arguments.accounts.size})
+              -----------------------------------------------------------------------------------------
+              """.trimIndent(),
+        )
 
         val transactionsResult = nordigenClient.getTransactions(account.id)
         transactionsResult.fold(
@@ -98,56 +107,73 @@ private suspend fun startBot(arguments: Arguments.Bot) {
             text += "_${account.name}_\n:warning: Error getting transactions: ${error.message}\n\n"
           },
           onSuccess = { transactions ->
-            logd("transactions=$transactions")
-            val transactions = transactions.distinctBy { it.id }
+            logd("transactions=${transactions.joinToString("\n")}")
+            val transactions = transactions
+              // We get the same transactions multiple times with different internal ids - so remove duplicates based on
+              // equals/hashCode which is based on the transaction date, amount and label.
+              .distinct()
             val lastTransactionsForAccount = lastTransactions[account].orEmpty().toSet()
-            val newTransactions = transactions - lastTransactionsForAccount
-            logd("newTransactions=$newTransactions")
-
             if (lastTransactionsForAccount.isEmpty()) {
               logd("No last transactions for account ${account.name}: skipping")
-            } else if (newTransactions.isNotEmpty()) {
-              // Account name
-              text += "_${account.name}_\n"
+            } else {
+              val newTransactions = transactions - lastTransactionsForAccount
+              logd("newTransactions=${newTransactions.joinToString("\n")}")
+              if (newTransactions.isNotEmpty()) {
+                // Account name
+                text += "_${account.name}_\n"
 
-              // Transactions
-              for (transaction in newTransactions) {
-                val transactionText =
-                  "${transaction.amount.formatted()} - ${transaction.label}\n"
-                logd(transactionText)
-                text += transactionText
-              }
+                // Transactions
+                for (transaction in newTransactions) {
+                  val transactionText =
+                    "${transaction.amount.formatted(withEmoji = true)} - ${transaction.label}\n"
+                  logd(transactionText)
+                  text += transactionText
+                }
 
-              val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-              val startOfThisMonth = today.minus(today.dayOfMonth - 1, DateTimeUnit.DAY)
-              val startOfLastMonth = startOfThisMonth.minus(1, DateTimeUnit.MONTH)
+                val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+                val startOfThisMonth = today.minus(today.dayOfMonth - 1, DateTimeUnit.DAY)
+                val startOf1MonthAgo = startOfThisMonth.minus(1, DateTimeUnit.MONTH)
+                val startOf2MonthsAgo = startOfThisMonth.minus(2, DateTimeUnit.MONTH)
 
-              // Spent/earned last month
-              val (spentLastMonth, earnedLastMonth, netLastMonth) = transactions.spentEarnedNet(
-                startDateInclusive = startOfLastMonth,
-                endDateExclusive = startOfThisMonth,
-              )
-              text += ":calendar: Last month: earned ${earnedLastMonth.formatted(withEmoji = false)}, spent ${
-                spentLastMonth.formatted(withEmoji = false)
-              }, net ${netLastMonth.formatted()}\n\n"
+                // Spent/earned 2 month ago
+                val (spent2MonthsAgo, earned2MonthsAgo, net2MonthsAgo) = transactions.spentEarnedNet(
+                  startDateInclusive = startOf2MonthsAgo,
+                  endDateExclusive = startOf1MonthAgo,
+                )
+                text += ":calendar: ${startOf2MonthsAgo.monthName()}: " +
+                    "earned ${earned2MonthsAgo.formatted()}, " +
+                    "spent ${spent2MonthsAgo.formatted()}, " +
+                    "net ${net2MonthsAgo.formatted(withEmoji = true)}\n\n"
 
-              // Spent/earned this month
-              val (spentThisMonth, earnedThisMonth, netThisMonth) = transactions.spentEarnedNet(
-                startDateInclusive = startOfThisMonth,
-                endDateExclusive = null,
-              )
-              text += ":sum: This month: earned ${earnedThisMonth.formatted(withEmoji = false)}, spent ${
-                spentThisMonth.formatted(withEmoji = false)
-              }, net ${netThisMonth.formatted()}\n"
+                // Spent/earned 1 month ago
+                val (spentLastMonth, earnedLastMonth, netLastMonth) = transactions.spentEarnedNet(
+                  startDateInclusive = startOf1MonthAgo,
+                  endDateExclusive = startOfThisMonth,
+                )
+                text += ":calendar: ${startOf1MonthAgo.monthName()}: " +
+                    "earned ${earnedLastMonth.formatted()}, " +
+                    "spent ${spentLastMonth.formatted()}, " +
+                    "net ${netLastMonth.formatted(withEmoji = true)}\n\n"
 
-              // Balance
-              val balanceResult = nordigenClient.getBalance(account.id)
-              text += if (balanceResult.isFailure) {
-                val e = balanceResult.exceptionOrNull()!!
-                logw(e, "Could not get balance for ${account.name}")
-                ":warning: Could not get balance for _${account.name}_: ${e.message}\n\n"
-              } else {
-                ":moneybag: Current balance: ${balanceResult.getOrThrow().formatted(withEmoji = false)}\n\n"
+                // Spent/earned this month
+                val (spentThisMonth, earnedThisMonth, netThisMonth) = transactions.spentEarnedNet(
+                  startDateInclusive = startOfThisMonth,
+                  endDateExclusive = null,
+                )
+                text += ":sum: This month: " +
+                    "earned ${earnedThisMonth.formatted()}, " +
+                    "spent ${spentThisMonth.formatted()}, " +
+                    "net ${netThisMonth.formatted(withEmoji = true)}\n"
+
+                // Balance
+                val balanceResult = nordigenClient.getBalance(account.id)
+                text += if (balanceResult.isFailure) {
+                  val e = balanceResult.exceptionOrNull()!!
+                  logw(e, "Could not get balance for ${account.name}")
+                  ":warning: Could not get balance for _${account.name}_: ${e.message}\n\n"
+                } else {
+                  ":moneybag: Current balance: ${balanceResult.getOrThrow().formatted()}\n\n"
+                }
               }
             }
 
@@ -165,10 +191,20 @@ private suspend fun startBot(arguments: Arguments.Bot) {
       logw(t, "Caught exception in main loop")
     }
 
-    logd("Sleep 6 hours")
+    logd(
+      """
+      Sleep 6 hours
+      ===========================================================================
+
+
+      """.trimIndent(),
+    )
     delay(6.hours)
   }
 }
+
+private fun LocalDate.monthName(): String =
+  month.name.lowercase().replaceFirstChar { it.uppercase() }
 
 private fun List<NordigenClient.Transaction>.spentEarnedNet(
   startDateInclusive: LocalDate,
@@ -189,7 +225,7 @@ private fun List<NordigenClient.Transaction>.spentEarnedNet(
 
 private fun BigDecimal.emoji() = if (signum() < 0) "🔻" else ":small_green_triangle:"
 
-private fun BigDecimal.formatted(withEmoji: Boolean = true) = if (withEmoji) {
+private fun BigDecimal.formatted(withEmoji: Boolean = false) = if (withEmoji) {
   emoji() + " "
 } else {
   ""
