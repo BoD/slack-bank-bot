@@ -44,6 +44,7 @@ import org.jraf.slackbankbot.nordigen.client.configuration.HttpLoggingLevel
 import java.math.BigDecimal
 import kotlin.system.exitProcess
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import org.jraf.slackbankbot.nordigen.client.configuration.ClientConfiguration as NordigenClientConfiguration
 
 private fun createNordigenClient(secretId: String, secretKey: String) = NordigenClient(
@@ -199,7 +200,7 @@ private suspend fun startBot(arguments: Arguments.Bot) {
 
       """.trimIndent(),
     )
-    delay(6.hours)
+    delay(6.hours + 10.minutes) // Add a few minutes because it looks like the backend is not exactly precise in its rate limiting.
   }
 }
 

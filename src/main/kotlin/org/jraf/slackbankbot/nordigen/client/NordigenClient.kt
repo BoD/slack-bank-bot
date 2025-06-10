@@ -169,9 +169,12 @@ class NordigenClient(private val clientConfiguration: ClientConfiguration) {
 
   private fun JsonAmount.toBigDecimal() = BigDecimal(amount)
 
+  // {"balances": [{"balanceAmount": {"amount": "9567.73", "currency": "EUR"}, "balanceType": "expected", "referenceDate": "2025-06-10"}]}
+  // {"balances": [{"balanceAmount": {"amount": "8016.42", "currency": "EUR"}, "balanceType": "expected", "referenceDate": "2025-06-09"}, {"balanceAmount": {"amount": "8016.42", "currency": "EUR"}, "balanceType": "closingBooked", "referenceDate": "2025-06-09"}]}
+  // {"balances": [{"balanceAmount": {"amount": "28537.33", "currency": "EUR"}, "balanceType": "closingBooked"}]}
   suspend fun getBalance(accountId: String): Result<BigDecimal> {
     return runCatching {
-      service.getBalances(accountId).balances.first { it.balanceType == "closingBooked" }.balanceAmount.toBigDecimal()
+      service.getBalances(accountId).balances.first().balanceAmount.toBigDecimal()
     }
   }
 
