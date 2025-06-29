@@ -108,31 +108,31 @@ class NordigenClient(private val clientConfiguration: ClientConfiguration) {
   }
 
   data class Transaction(
-    val id: String,
+    val internalId: String,
+    val id: String?,
     val date: LocalDate,
     val amount: BigDecimal,
     val label: String,
   ) {
-    // We get the same transactions multiple times with different internal ids ¯\_(ツ)_/¯
-    // So base equality on the date, amount and label.
+    // We get the same transactions multiple times with different internal ids, but same transactionId ¯\_(ツ)_/¯
+    // So base equality on that fact.
     override fun equals(other: Any?): Boolean {
       if (this === other) return true
       if (javaClass != other?.javaClass) return false
 
       other as Transaction
 
-      if (date != other.date) return false
-      if (amount != other.amount) return false
-      if (label != other.label) return false
-
-      return true
+      if (internalId == other.internalId) return true
+      if (id != null && id == other.id) return true
+      return false
     }
 
     override fun hashCode(): Int {
-      var result = date.hashCode()
-      result = 31 * result + amount.hashCode()
-      result = 31 * result + label.hashCode()
-      return result
+      if (id != null) {
+        return id.hashCode()
+      } else {
+        return internalId.hashCode()
+      }
     }
   }
 
@@ -149,7 +149,8 @@ class NordigenClient(private val clientConfiguration: ClientConfiguration) {
       is JsonTransactionsSuccessResponse -> Result.success(
         response.transactions.booked.map { jsonTransaction ->
           Transaction(
-            id = jsonTransaction.internalTransactionId,
+            internalId = jsonTransaction.internalTransactionId,
+            id = jsonTransaction.transactionId,
             date = LocalDate.parse(jsonTransaction.bookingDate),
             amount = jsonTransaction.transactionAmount.toBigDecimal(),
             label = jsonTransaction.remittanceInformationUnstructuredArray

@@ -29,6 +29,7 @@ import kotlinx.cli.ArgParser
 import kotlinx.cli.ArgType
 import kotlinx.cli.ExperimentalCli
 import kotlinx.cli.Subcommand
+import kotlinx.cli.multiple
 import kotlinx.cli.required
 import kotlinx.cli.vararg
 
@@ -67,6 +68,13 @@ class Arguments(av: Array<String>) {
       shortName = "c",
       description = "Slack channel"
     ).required()
+
+    val ignoreInSpentEarned: List<String> by option(
+      type = ArgType.String,
+      fullName = "ignore-in-spent-earned",
+      shortName = "i",
+      description = "Transactions to ignore in spent/earned calculations (as a regex on the label)",
+    ).multiple()
 
     private val accountsStr: List<String> by argument(
       type = ArgType.String,

@@ -68,6 +68,7 @@ data class JsonTransactionsTransactions(
 @Serializable
 data class JsonTransactionsTransaction(
   val internalTransactionId: String,
+  val transactionId: String? = null,
   val bookingDate: String,
   val transactionAmount: JsonAmount,
   val remittanceInformationUnstructuredArray: List<String>,

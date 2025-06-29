@@ -136,8 +136,11 @@ private suspend fun startBot(arguments: Arguments.Bot) {
                 val startOf1MonthAgo = startOfThisMonth.minus(1, DateTimeUnit.MONTH)
                 val startOf2MonthsAgo = startOfThisMonth.minus(2, DateTimeUnit.MONTH)
 
+                val transactionsWithoutIgnoredOnes = transactions.filterNot { transaction ->
+                  arguments.ignoreInSpentEarned.any { regex -> regex.toRegex().containsMatchIn(transaction.label) }
+                }
                 // Spent/earned 2 month ago
-                val (spent2MonthsAgo, earned2MonthsAgo, net2MonthsAgo) = transactions.spentEarnedNet(
+                val (spent2MonthsAgo, earned2MonthsAgo, net2MonthsAgo) = transactionsWithoutIgnoredOnes.spentEarnedNet(
                   startDateInclusive = startOf2MonthsAgo,
                   endDateExclusive = startOf1MonthAgo,
                 )
@@ -147,7 +150,7 @@ private suspend fun startBot(arguments: Arguments.Bot) {
                     "net ${net2MonthsAgo.formatted(withEmoji = true)}\n\n"
 
                 // Spent/earned 1 month ago
-                val (spentLastMonth, earnedLastMonth, netLastMonth) = transactions.spentEarnedNet(
+                val (spentLastMonth, earnedLastMonth, netLastMonth) = transactionsWithoutIgnoredOnes.spentEarnedNet(
                   startDateInclusive = startOf1MonthAgo,
                   endDateExclusive = startOfThisMonth,
                 )
@@ -157,7 +160,7 @@ private suspend fun startBot(arguments: Arguments.Bot) {
                     "net ${netLastMonth.formatted(withEmoji = true)}\n\n"
 
                 // Spent/earned this month
-                val (spentThisMonth, earnedThisMonth, netThisMonth) = transactions.spentEarnedNet(
+                val (spentThisMonth, earnedThisMonth, netThisMonth) = transactionsWithoutIgnoredOnes.spentEarnedNet(
                   startDateInclusive = startOfThisMonth,
                   endDateExclusive = null,
                 )
