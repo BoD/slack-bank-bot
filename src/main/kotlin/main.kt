@@ -23,8 +23,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+@file:OptIn(ExperimentalTime::class)
+
 import kotlinx.coroutines.delay
-import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -43,8 +44,10 @@ import org.jraf.slackbankbot.nordigen.client.configuration.HttpConfiguration
 import org.jraf.slackbankbot.nordigen.client.configuration.HttpLoggingLevel
 import java.math.BigDecimal
 import kotlin.system.exitProcess
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.ExperimentalTime
 import org.jraf.slackbankbot.nordigen.client.configuration.ClientConfiguration as NordigenClientConfiguration
 
 private fun createNordigenClient(secretId: String, secretKey: String) = NordigenClient(
@@ -52,7 +55,7 @@ private fun createNordigenClient(secretId: String, secretKey: String) = Nordigen
     secretId = secretId,
     secretKey = secretKey,
 //    httpConfiguration = HttpConfiguration(httpProxy = HttpProxy(host = "localhost", port = 8888))
-    httpConfiguration = HttpConfiguration(loggingLevel = HttpLoggingLevel.BODY),
+    httpConfiguration = HttpConfiguration(loggingLevel = HttpLoggingLevel.ALL),
   ),
 )
 
@@ -132,7 +135,7 @@ private suspend fun startBot(arguments: Arguments.Bot) {
                 }
 
                 val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-                val startOfThisMonth = today.minus(today.dayOfMonth - 1, DateTimeUnit.DAY)
+                val startOfThisMonth = today.minus(today.day - 1, DateTimeUnit.DAY)
                 val startOf1MonthAgo = startOfThisMonth.minus(1, DateTimeUnit.MONTH)
                 val startOf2MonthsAgo = startOfThisMonth.minus(2, DateTimeUnit.MONTH)
 
