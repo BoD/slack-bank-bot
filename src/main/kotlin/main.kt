@@ -124,15 +124,7 @@ private suspend fun startBot(arguments: Arguments.Bot) {
               logd("newTransactions=${newTransactions.joinToString("\n")}")
               if (newTransactions.isNotEmpty()) {
                 // Account name
-                text += "_${account.name}_\n"
-
-                // Transactions
-                for (transaction in newTransactions) {
-                  val transactionText =
-                    "${transaction.amount.formatted(withEmoji = true)} - ${transaction.label}\n"
-                  logd(transactionText)
-                  text += transactionText
-                }
+                text += "_*${account.name}*_\n"
 
                 val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
                 val startOfThisMonth = today.minus(today.day - 1, DateTimeUnit.DAY)
@@ -161,6 +153,14 @@ private suspend fun startBot(arguments: Arguments.Bot) {
                     "earned ${earnedLastMonth.formatted()}, " +
                     "spent ${spentLastMonth.formatted()}, " +
                     "net ${netLastMonth.formatted(withEmoji = true)}\n\n"
+
+                // Transactions
+                for (transaction in newTransactions) {
+                  val transactionText =
+                    "${transaction.amount.formatted(withEmoji = true)} - ${transaction.label}\n"
+                  logd(transactionText)
+                  text += transactionText
+                }
 
                 // Spent/earned this month
                 val (spentThisMonth, earnedThisMonth, netThisMonth) = transactionsWithoutIgnoredOnes.spentEarnedNet(
@@ -236,4 +236,16 @@ private fun BigDecimal.formatted(withEmoji: Boolean = false) = if (withEmoji) {
   emoji() + " "
 } else {
   ""
-} + "*" + String.format("%.2f", this) + " €*"
+} + "*" + String.format("%.2f", this).withSpaces() + " €*"
+
+private fun String.withSpaces(): String {
+  val parts = this.split(".")
+  val integerPart = parts[0]
+  val decimalPart = if (parts.size > 1) parts[1] else null
+  val integerPartWithSpaces = integerPart.reversed().chunked(3).joinToString(" ").reversed()
+  return if (decimalPart != null) {
+    "$integerPartWithSpaces.$decimalPart"
+  } else {
+    integerPartWithSpaces
+  }
+}
